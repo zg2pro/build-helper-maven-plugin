@@ -24,6 +24,8 @@ package org.codehaus.mojo.buildhelper;
  * SOFTWARE.
  */
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -36,6 +38,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.codehaus.plexus.util.StringUtils;
 
 /**
  * Attach additional artifacts to be installed and deployed.
@@ -50,8 +53,11 @@ public class AttachArtifactMojo
     /**
      * Attach an array of artifacts to the project.
      */
-    @Parameter( required = true )
+    @Parameter( required = false )
     private Artifact[] artifacts;
+
+    @Parameter( property = "buildhelper.artifacts", required = false )
+    private String artifactsJson;
 
     @Parameter( readonly = true, defaultValue = "${project}" )
     private MavenProject project;
@@ -97,6 +103,7 @@ public class AttachArtifactMojo
         }
         else
         {
+            this.collectArtifacts();
             this.validateArtifacts();
 
             for ( Artifact artifact : artifacts )
@@ -108,11 +115,27 @@ public class AttachArtifactMojo
 
     }
 
+    private void collectArtifacts() throws MojoFailureException{
+        if (StringUtils.isBlank( artifactsJson ) && (artifacts == null || artifacts.length == 0)){
+            throw new MojoFailureException( "Please provide a collection of artifacts to attach." );
+        } else if (artifacts == null || artifacts.length == 0){
+            ObjectMapper om = new ObjectMapper();
+            try
+            {
+              artifacts=  om.readValue( artifactsJson, Artifact[].class );
+            }
+            catch ( JsonProcessingException ex )
+            {
+                throw new MojoFailureException( "Error parsing artifacts json", ex );
+            }
+        }
+    }
+    
     private void validateArtifacts()
         throws MojoFailureException
     {
         // check unique of types and classifiers
-        Set<String> extensionClassifiers = new HashSet<String>();
+        Set<String> extensionClassifiers = new HashSet<>();
         for ( Artifact artifact : artifacts )
         {
             String extensionClassifier = artifact.getType() + ":" + artifact.getClassifier();
